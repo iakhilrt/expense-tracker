@@ -7,10 +7,7 @@ import com.expense.tracker.backend.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -20,6 +17,11 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+
+    @GetMapping("/health-check")
+    public String health() {
+        return "OK";
+    }
 
     @PostMapping("/request-otp")
     public ResponseEntity<?> requestOtp(@Valid @RequestBody OtpRequest request) {
