@@ -67,11 +67,11 @@ const Budgets = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const catRes = await api.get('/categories');
+        const catRes = await api.get('/api/categories');
         const allCategories = catRes.data;
 
         try {
-          const budgetRes = await api.get('/budgets/current', {
+          const budgetRes = await api.get('/api/budgets/current', {
             params: { month: selectedMonth, year: selectedYear }
           });
           const existingBudget = budgetRes.data;
@@ -121,7 +121,7 @@ const Budgets = () => {
     setSaving(true);
     setMessage('');
     try {
-      const response = await api.post('/budgets', {
+      const response = await api.post('/api/budgets', {
         ...budget,
         month: selectedMonth,
         year: selectedYear

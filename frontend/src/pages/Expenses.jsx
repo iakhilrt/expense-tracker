@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { Plus, Edit2, Trash2, X, Search, ShieldAlert } from 'lucide-react';
 
+const getTodayDate = () => {
+  const today = new Date();
+  const offset = today.getTimezoneOffset();
+  const localDate = new Date(today.getTime() - offset * 60 * 1000);
+  return localDate.toISOString().split('T')[0];
+};
+
 const Expenses = () => {
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -12,7 +19,7 @@ const Expenses = () => {
     title: '',
     amount: '',
     categoryId: '',
-    expenseDate: new Date().toISOString().split('T')[0],
+    expenseDate: getTodayDate(),
     notes: ''
   });
   const [error, setError] = useState('');
@@ -21,8 +28,8 @@ const Expenses = () => {
   const fetchData = async () => {
     try {
       const [expRes, catRes] = await Promise.all([
-        api.get('/expenses'),
-        api.get('/categories')
+        api.get('/api/expenses'),
+        api.get('/api/categories')
       ]);
       setExpenses(expRes.data);
       setCategories(catRes.data);
@@ -41,9 +48,9 @@ const Expenses = () => {
     try {
       const data = { ...formData, amount: parseFloat(formData.amount) };
       if (editingExpense) {
-        await api.put(`/expenses/${editingExpense.id}`, data);
+        await api.put(`/api/expenses/${editingExpense.id}`, data);
       } else {
-        await api.post('/expenses', data);
+        await api.post('/api/expenses', data);
       }
       fetchData();
       closeModal();
@@ -55,7 +62,7 @@ const Expenses = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Delete this expense?')) {
       try {
-        await api.delete(`/expenses/${id}`);
+        await api.delete(`/api/expenses/${id}`);
         fetchData();
       } catch (err) {
         console.error('Failed to delete expense', err);
@@ -79,7 +86,7 @@ const Expenses = () => {
         title: '',
         amount: '',
         categoryId: categories[0]?.id || '',
-        expenseDate: new Date().toISOString().split('T')[0],
+        expenseDate: getTodayDate(),
         notes: ''
       });
     }
@@ -262,13 +269,18 @@ const Expenses = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
                 <select
                   required
-                  value={formData.categoryId}
+                  value={formData.categoryId || ""}
                   onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all bg-white text-sm"
                 >
-                  <option value="">Select Category</option>
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                  <option value="" disabled hidden>
+                    Select Category
+                  </option>
+
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.icon} {c.name}
+                    </option>
                   ))}
                 </select>
               </div>

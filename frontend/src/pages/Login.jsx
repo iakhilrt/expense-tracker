@@ -11,7 +11,7 @@ const Login = ({ onSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      await api.post('/auth/request-otp', { email });
+      await api.post('/api/auth/request-otp', { email });
       onSuccess(email);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send OTP');

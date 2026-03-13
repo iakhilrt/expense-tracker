@@ -11,7 +11,7 @@ const Categories = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await api.get('/categories');
+      const response = await api.get('/api/categories');
       setCategories(response.data);
     } catch (err) {
       console.error('Failed to fetch categories', err);
@@ -26,9 +26,9 @@ const Categories = () => {
     e.preventDefault();
     try {
       if (editingCategory) {
-        await api.put(`/categories/${editingCategory.id}`, formData);
+        await api.put(`/api/categories/${editingCategory.id}`, formData);
       } else {
-        await api.post('/categories', formData);
+        await api.post('/api/categories', formData);
       }
       fetchCategories();
       closeModal();
@@ -40,7 +40,7 @@ const Categories = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this category?')) {
       try {
-        await api.delete(`/categories/${id}`);
+        await api.delete(`/api/categories/${id}`);
         fetchCategories();
       } catch (err) {
         console.error('Failed to delete category', err);

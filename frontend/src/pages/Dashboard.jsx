@@ -13,7 +13,7 @@ const Dashboard = () => {
     const fetchSummary = async () => {
       try {
         const now = new Date();
-        const response = await api.get('/dashboard/summary', {
+        const response = await api.get('/api/dashboard/summary', {
           params: { month: now.getMonth() + 1, year: now.getFullYear() }
         });
         setData(response.data);

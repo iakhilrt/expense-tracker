@@ -11,7 +11,7 @@ const Settings = () => {
   const handleToggleGovMode = async () => {
     try {
       const newValue = !govMode;
-      await api.put('/user/settings', { governmentModeEnabled: newValue });
+      await api.put('/api/user/settings', { governmentModeEnabled: newValue });
       updateSettings({ governmentModeEnabled: newValue });
       setGovMode(newValue);
       setSuccess(true);
