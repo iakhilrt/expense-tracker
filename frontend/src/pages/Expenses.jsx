@@ -99,10 +99,20 @@ const Expenses = () => {
     setError('');
   };
 
-  const filteredExpenses = expenses.filter(e =>
-    e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.categoryName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredExpenses = expenses
+    .filter(e =>
+      e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      e.categoryName.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+
+      // 1️⃣ Sort by date (latest first)
+      const dateDiff = new Date(b.expenseDate) - new Date(a.expenseDate);
+      if (dateDiff !== 0) return dateDiff;
+
+      // 2️⃣ If same date → lower amount first
+      return a.amount - b.amount;
+    });
 
   if (loading) return <div className="p-4">Loading...</div>;
 
@@ -152,7 +162,7 @@ const Expenses = () => {
               <tr key={expense.id} className="hover:bg-slate-50/50 transition-colors">
                 <td className="px-6 lg:px-8 py-4 lg:py-6">
                   <div className="font-bold text-slate-900 text-sm lg:text-base">{expense.title}</div>
-                  <div className="text-xs lg:text-sm text-slate-400">{new Date(expense.expenseDate).toLocaleDateString()}</div>
+                  <div className="text-xs lg:text-sm text-slate-400">{new Date(expense.expenseDate).toLocaleDateString('en-GB')}</div>
                 </td>
                 <td className="px-6 lg:px-8 py-4 lg:py-6">
                   <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100 rounded-full w-fit">
