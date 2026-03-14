@@ -1,57 +1,65 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
+import { queryKeys } from '../services/queryKeys';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 
 const Categories = () => {
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [formData, setFormData] = useState({ name: '', icon: '💰', color: '#0ea5e9' });
 
-  const fetchCategories = async () => {
-    try {
-      const response = await api.get('/api/categories');
-      setCategories(response.data);
-    } catch (err) {
-      console.error('Failed to fetch categories', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const { data: categories = [], isLoading } = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: () => api.get('/api/categories').then(r => r.data),
+  });
 
-  useEffect(() => { fetchCategories(); }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editingCategory) {
-        await api.put(`/api/categories/${editingCategory.id}`, formData);
-      } else {
-        await api.post('/api/categories', formData);
-      }
-      fetchCategories();
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const createMutation = useMutation({
+    mutationFn: (data) => api.post('/api/categories', data),
+    onSuccess: () => {
+      // Invalidate categories so budget page gets new category too
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       closeModal();
-    } catch (err) {
-      console.error('Failed to save category', err);
-    }
-  };
+    },
+  });
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this category?")) return;
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/api/categories/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      closeModal();
+    },
+  });
 
-    try {
-      await api.delete(`/api/categories/${id}`);
-
-      setCategories(prev => prev.filter(c => c.id !== id));
-
-    } catch (err) {
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/api/categories/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
+    onError: (err) => {
       const message =
         err?.response?.data?.message ||
-        err?.response?.data ||
-        "Category cannot be deleted because it is used in budgets or expenses.";
+        'Category cannot be deleted because it is used in budgets or expenses.';
+      alert(message.replace(/^409\s*CONFLICT\s*/i, ''));
+    },
+  });
 
-      alert(message.replace(/^409\s*CONFLICT\s*/i, ""));
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (editingCategory) {
+      updateMutation.mutate({ id: editingCategory.id, data: formData });
+    } else {
+      createMutation.mutate(formData);
+    }
+  };
+
+  const handleDelete = (id) => {
+    if (window.confirm('Are you sure you want to delete this category?')) {
+      deleteMutation.mutate(id);
     }
   };
 
@@ -72,7 +80,9 @@ const Categories = () => {
     setFormData({ name: '', icon: '💰', color: '#0ea5e9' });
   };
 
-  if (loading) return <div className="p-4">Loading...</div>;
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  if (isLoading) return <div className="p-4 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -100,18 +110,14 @@ const Categories = () => {
               >
                 {category.icon}
               </div>
-
               <div className="flex gap-1 lg:gap-2">
-                <button
-                  onClick={() => openModal(category)}
-                  className="p-1.5 lg:p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-primary-600"
-                >
+                <button onClick={() => openModal(category)} className="p-1.5 lg:p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-primary-600">
                   <Edit2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                 </button>
-
                 <button
                   onClick={() => handleDelete(category.id)}
-                  className="p-1.5 lg:p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600"
+                  disabled={deleteMutation.isPending}
+                  className="p-1.5 lg:p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                 </button>
@@ -122,7 +128,6 @@ const Categories = () => {
         ))}
       </div>
 
-      {/* Modal — slides up on mobile */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 w-full sm:max-w-md">
@@ -172,18 +177,13 @@ const Categories = () => {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl transition-colors text-sm"
-                >
+                <button type="button" onClick={closeModal}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl transition-colors text-sm">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-2xl transition-colors shadow-lg shadow-primary-200 text-sm"
-                >
-                  {editingCategory ? 'Update' : 'Create'}
+                <button type="submit" disabled={isSaving}
+                  className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-2xl transition-colors shadow-lg shadow-primary-200 text-sm">
+                  {isSaving ? 'Saving...' : editingCategory ? 'Update' : 'Create'}
                 </button>
               </div>
             </form>

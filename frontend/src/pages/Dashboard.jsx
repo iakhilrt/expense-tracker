@@ -1,33 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
+import { queryKeys } from '../services/queryKeys';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { Wallet, Receipt, TrendingUp } from 'lucide-react';
 
 const Dashboard = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
 
-  useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        const now = new Date();
-        const response = await api.get('/api/dashboard/summary', {
-          params: { month: now.getMonth() + 1, year: now.getFullYear() }
-        });
-        setData(response.data);
-      } catch (err) {
-        console.error('Failed to fetch summary', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSummary();
-  }, []);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: queryKeys.dashboard(month, year),
+    queryFn: () =>
+      api.get('/api/dashboard/summary', { params: { month, year } }).then(r => r.data),
+  });
 
-  if (loading) return <div className="p-4">Loading...</div>;
-  if (!data) return (
+  if (isLoading) return <div className="p-4 text-slate-500">Loading...</div>;
+  if (isError || !data) return (
     <div className="p-4 text-slate-500">
       No budget set for this month. Go to Budgets to set one.
     </div>
@@ -43,7 +35,7 @@ const Dashboard = () => {
       <header>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-slate-500 text-sm sm:text-base">
-          Overview of your finances for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+          Overview of your finances for {now.toLocaleString('default', { month: 'long', year: 'numeric' })}
         </p>
       </header>
 
@@ -82,7 +74,6 @@ const Dashboard = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-        {/* Category Breakdown */}
         <div className="bg-white p-6 lg:p-8 rounded-2xl lg:rounded-3xl border border-slate-100 shadow-sm">
           <h2 className="text-lg lg:text-xl font-bold text-slate-900 mb-5 lg:mb-6">Category Spending</h2>
           {data.categoryBreakdown.length === 0 ? (
@@ -109,7 +100,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Daily Trend */}
         <div className="bg-white p-6 lg:p-8 rounded-2xl lg:rounded-3xl border border-slate-100 shadow-sm">
           <h2 className="text-lg lg:text-xl font-bold text-slate-900 mb-5 lg:mb-6">Daily Spending</h2>
           {lineData.length === 0 ? (
@@ -119,33 +109,10 @@ const Dashboard = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={lineData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="date"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    width={50}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: '16px',
-                      border: 'none',
-                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="amount"
-                    stroke="#0ea5e9"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#0ea5e9' }}
-                    activeDot={{ r: 6 }}
-                  />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} width={50} />
+                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                  <Line type="monotone" dataKey="amount" stroke="#0ea5e9" strokeWidth={3} dot={{ r: 4, fill: '#0ea5e9' }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

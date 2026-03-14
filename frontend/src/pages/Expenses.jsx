@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
+import { queryKeys } from '../services/queryKeys';
 import { Plus, Edit2, Trash2, X, Search, ShieldAlert } from 'lucide-react';
 
 const getTodayDate = () => {
@@ -9,85 +11,87 @@ const getTodayDate = () => {
   return localDate.toISOString().split('T')[0];
 };
 
+const now = new Date();
+const CURRENT_MONTH = now.getMonth() + 1;
+const CURRENT_YEAR = now.getFullYear();
+
 const Expenses = () => {
-  const [expenses, setExpenses] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [formData, setFormData] = useState({
-    title: '',
-    amount: '',
-    categoryId: '',
-    expenseDate: getTodayDate(),
-    notes: ''
+    title: '', amount: '', categoryId: '',
+    expenseDate: getTodayDate(), notes: ''
   });
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const fetchData = async () => {
-    try {
-      const [expRes, catRes] = await Promise.all([
-        api.get('/api/expenses'),
-        api.get('/api/categories')
-      ]);
-      setExpenses(expRes.data);
-      setCategories(catRes.data);
-    } catch (err) {
-      console.error('Failed to fetch data', err);
-    } finally {
-      setLoading(false);
-    }
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const { data: expenses = [], isLoading: expLoading } = useQuery({
+    queryKey: queryKeys.expenses,
+    queryFn: () => api.get('/api/expenses').then(r => r.data),
+  });
+
+  const { data: categories = [], isLoading: catLoading } = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: () => api.get('/api/categories').then(r => r.data),
+  });
+
+  // ── Invalidation helper ────────────────────────────────────────────────────
+  // After any expense change, invalidate expenses + dashboard (totals change)
+  const invalidateAfterMutation = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.expenses });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(CURRENT_MONTH, CURRENT_YEAR) });
   };
 
-  useEffect(() => { fetchData(); }, []);
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const createMutation = useMutation({
+    mutationFn: (data) => api.post('/api/expenses', data),
+    onSuccess: () => { invalidateAfterMutation(); closeModal(); },
+    onError: (err) => setError(err.response?.data?.message || 'Failed to save expense'),
+  });
 
-  const handleSubmit = async (e) => {
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/api/expenses/${id}`, data),
+    onSuccess: () => { invalidateAfterMutation(); closeModal(); },
+    onError: (err) => setError(err.response?.data?.message || 'Failed to save expense'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/api/expenses/${id}`),
+    onSuccess: invalidateAfterMutation,
+  });
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
-    try {
-      const data = { ...formData, amount: parseFloat(formData.amount) };
-      if (editingExpense) {
-        await api.put(`/api/expenses/${editingExpense.id}`, data);
-      } else {
-        await api.post('/api/expenses', data);
-      }
-      fetchData();
-      closeModal();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save expense');
+    const data = { ...formData, amount: parseFloat(formData.amount) };
+    if (editingExpense) {
+      updateMutation.mutate({ id: editingExpense.id, data });
+    } else {
+      createMutation.mutate(data);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Delete this expense?')) {
-      try {
-        await api.delete(`/api/expenses/${id}`);
-        fetchData();
-      } catch (err) {
-        console.error('Failed to delete expense', err);
-      }
-    }
+  const handleDelete = (id) => {
+    if (window.confirm('Delete this expense?')) deleteMutation.mutate(id);
   };
 
   const openModal = (expense = null) => {
     if (expense) {
       setEditingExpense(expense);
       setFormData({
-        title: expense.title,
-        amount: expense.amount,
-        categoryId: expense.categoryId,
-        expenseDate: expense.expenseDate,
+        title: expense.title, amount: expense.amount,
+        categoryId: expense.categoryId, expenseDate: expense.expenseDate,
         notes: expense.notes || ''
       });
     } else {
       setEditingExpense(null);
       setFormData({
-        title: '',
-        amount: '',
+        title: '', amount: '',
         categoryId: categories[0]?.id || '',
-        expenseDate: getTodayDate(),
-        notes: ''
+        expenseDate: getTodayDate(), notes: ''
       });
     }
     setIsModalOpen(true);
@@ -99,22 +103,19 @@ const Expenses = () => {
     setError('');
   };
 
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
   const filteredExpenses = expenses
     .filter(e =>
       e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.categoryName.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
-
-      // 1️⃣ Sort by date (latest first)
       const dateDiff = new Date(b.expenseDate) - new Date(a.expenseDate);
-      if (dateDiff !== 0) return dateDiff;
-
-      // 2️⃣ If same date → lower amount first
-      return a.amount - b.amount;
+      return dateDiff !== 0 ? dateDiff : a.amount - b.amount;
     });
 
-  if (loading) return <div className="p-4">Loading...</div>;
+  if (expLoading || catLoading) return <div className="p-4 text-slate-500">Loading...</div>;
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -178,7 +179,8 @@ const Expenses = () => {
                     <button onClick={() => openModal(expense)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleDelete(expense.id)} className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors">
+                    <button onClick={() => handleDelete(expense.id)} disabled={deleteMutation.isPending}
+                      className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -242,72 +244,47 @@ const Expenses = () => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.title}
+                <input type="text" required value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all text-sm"
-                  placeholder="e.g. Starbucks, Grocery"
-                />
+                  placeholder="e.g. Starbucks, Grocery" />
               </div>
 
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    value={formData.amount}
+                  <input type="number" required value={formData.amount}
                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all text-sm"
-                  />
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all text-sm" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.expenseDate}
+                  <input type="date" required value={formData.expenseDate}
                     onChange={(e) => setFormData({ ...formData, expenseDate: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all text-sm"
-                  />
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all text-sm" />
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
-                <select
-                  required
-                  value={formData.categoryId || ""}
+                <select required value={formData.categoryId || ''}
                   onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all bg-white text-sm"
-                >
-                  <option value="" disabled hidden>
-                    Select Category
-                  </option>
-
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 outline-none transition-all bg-white text-sm">
+                  <option value="" disabled hidden>Select Category</option>
                   {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.icon} {c.name}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
                   ))}
                 </select>
               </div>
 
               <div className="flex gap-3 lg:gap-4 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl transition-colors text-sm"
-                >
+                <button type="button" onClick={closeModal}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl transition-colors text-sm">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-2xl transition-colors shadow-lg shadow-primary-200 text-sm"
-                >
-                  {editingExpense ? 'Update' : 'Add Expense'}
+                <button type="submit" disabled={isSaving}
+                  className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-2xl transition-colors shadow-lg shadow-primary-200 text-sm">
+                  {isSaving ? 'Saving...' : editingExpense ? 'Update' : 'Add Expense'}
                 </button>
               </div>
             </form>
