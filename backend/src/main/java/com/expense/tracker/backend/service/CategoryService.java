@@ -1,14 +1,18 @@
 package com.expense.tracker.backend.service;
 
+
 import com.expense.tracker.backend.dto.CategoryDTO;
 import com.expense.tracker.backend.entity.Category;
 import com.expense.tracker.backend.entity.User;
 import com.expense.tracker.backend.repository.CategoryRepository;
 import com.expense.tracker.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,14 +65,34 @@ public class CategoryService {
 
     @Transactional
     public void deleteCategory(Long id) {
+
         User currentUser = getCurrentUser();
+
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Category not found"
+                ));
 
         if (!category.getUser().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Unauthorized"
+            );
         }
-        categoryRepository.delete(category);
+
+        try {
+
+            categoryRepository.delete(category);
+            categoryRepository.flush();   // forces SQL execution
+
+        } catch (DataIntegrityViolationException ex) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Category cannot be deleted because it is used in budgets or expenses."
+            );
+        }
     }
 
     private CategoryDTO convertToDTO(Category category) {

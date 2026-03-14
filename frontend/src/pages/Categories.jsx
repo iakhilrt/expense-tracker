@@ -38,13 +38,20 @@ const Categories = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this category?')) {
-      try {
-        await api.delete(`/api/categories/${id}`);
-        fetchCategories();
-      } catch (err) {
-        console.error('Failed to delete category', err);
-      }
+    if (!window.confirm("Delete this category?")) return;
+
+    try {
+      await api.delete(`/api/categories/${id}`);
+
+      setCategories(prev => prev.filter(c => c.id !== id));
+
+    } catch (err) {
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data ||
+        "Category cannot be deleted because it is used in budgets or expenses.";
+
+      alert(message.replace(/^409\s*CONFLICT\s*/i, ""));
     }
   };
 
@@ -93,11 +100,19 @@ const Categories = () => {
               >
                 {category.icon}
               </div>
-              <div className="flex gap-1 lg:gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openModal(category)} className="p-1.5 lg:p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-primary-600">
+
+              <div className="flex gap-1 lg:gap-2">
+                <button
+                  onClick={() => openModal(category)}
+                  className="p-1.5 lg:p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-primary-600"
+                >
                   <Edit2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                 </button>
-                <button onClick={() => handleDelete(category.id)} className="p-1.5 lg:p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600">
+
+                <button
+                  onClick={() => handleDelete(category.id)}
+                  className="p-1.5 lg:p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600"
+                >
                   <Trash2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                 </button>
               </div>
